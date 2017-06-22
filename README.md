@@ -16,11 +16,12 @@ Run the server and in another terminal, execute this:
 If the -m parameter is omitted (i.e. mac is omitted), it reads the MAC address of the appropriate interface of the system it is being run from.
 
 ### Outputformat:
+<pre>
 -> IP address with subnet(CIDR format)
 -> Network address
 -> Broadcast address
 -> Default Gateway
 -> Default DNS
 -> Subnet mask
-
+</pre>
 For additional test cases, look into the "testcases" folder and copy them into subnets.conf
