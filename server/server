@@ -1,0 +1,370 @@
+#!/usr/bin/python
+import socket
+import os
+import sys,commands
+import math,re
+import operator
+
+def host_list(lab_name,lab_no,ntwrk_range):
+	# print ntwrk_range
+	global start_addr,end_addr,dictnary,ip_pntr,end_pntr,ntwrk_id,prfx,mask
+	n=ntwrk_range[1]
+	host_num=lab_no
+	count=host_num+2
+	h=math.log(count,2)
+	h=int(math.ceil(h))   #host bits
+	cnt=2**h-1
+	cnt=bin(cnt)[2:]
+	cnt1=0
+	prfx[lab_name]=32-h
+	tmp=prfx[lab_name]
+	ntmask=[]
+	tmp_val=[]
+	while tmp>0:
+		if tmp<8:
+			break
+		ntmask.append(8*'1')
+		tmp-=8
+	ntmask.append(tmp*'1'+(8-tmp)*'0')
+	while len(ntmask)<4:
+		ntmask.append(8*'0')
+	for i in range(len(ntmask)):
+		tmp_val.append(int(ntmask[i],2))
+	mask[lab_name]=tmp_val
+	# print cnt
+	b=32-(n+h)
+	# addr=ntwrk_range[0].split('.')
+	octet=[]
+	for i in range(len(start_addr)):
+		start_addr[i]=int(start_addr[i])
+		octet.append(int('{:08b}'.format(start_addr[i])))
+	# print octet
+	# print start_addr
+	tmp=3
+	j=h
+	lst=j
+	# print start_addr
+	ntwrk_id[lab_name]=list(start_addr)
+	if h>0:
+		start_addr[3]=start_addr[3]+1
+	else:
+		print "No Host Bits"
+	# print start_addr
+	# start_str=".".join(str(i) for i in start_addr)
+	ip_pntr[lab_name]=list(start_addr)
+	while j>0:
+		#string to be added
+		if j-8<=0:
+			val=int('{:08b}'.format(2**j-1))  
+		else:
+			val=int('{:08b}'.format(2**8-1))
+		# print val,
+		# print val,
+		octet[tmp]=octet[tmp]+val
+		tmp-=1
+		j-=8
+		lst=j
+		end_addr=[]
+	# print octet
+	for i in range(len(octet)):
+		end_addr.append(int(str(octet[i]),2))
+	for i in range(0,3):
+		if int(end_addr[i])>=int(end_ntwk_addr[i]):
+			cnt1+=1
+	if int(end_addr[3])>int(end_ntwk_addr[3]):
+		cnt1+=1
+	if cnt1==4:
+		end_addr=[]
+		end_addr.append(-1)
+	end_pntr[lab_name]=list(end_addr)
+	start_str=".".join(str(i) for i in start_addr)
+	end_str=".".join(str(i) for i in end_addr)
+	lab_info={
+			'start':start_str,
+			'end':end_str
+		}
+	# d=dict()
+	dictnary[lab_name]=lab_info
+	flag=1
+	#calculation of next adrress ranges
+	for i in range(len(end_addr)-1,-1,-1):
+		if flag==0:
+			break
+		if end_addr[i] == 255:
+			end_addr[i]=0
+			flag=1
+
+		else:
+			end_addr[i]+=1
+			flag=0
+	start_addr=end_addr[:]
+#assigning ip
+def ip_assign(mac_adr,lab_name):
+	global ip_pntr,mac_ip,end_pntr,ntwrk_id,mask     #initially ip_pntr has gateway_addr
+	cnt=0
+	cnt1=0
+	# print end_pntr[lab_name]
+	if dictnary[lab_name]['end']=="-1":
+		print "No available host addresses"
+		client_socket.send("No available host addresses")
+		client_socket.recv(4096)
+		client_socket.send("done")
+		return		
+	if lab_name!="None":
+		for i in range(0,4):
+			if end_pntr[lab_name][i]==ip_pntr[lab_name][i]:
+				cnt+=1
+	elif lab_name=="None":
+		for i in range(0,3):
+			if end_pntr[lab_name][i]==end_ntwk_addr[i]:
+				cnt1+=1
+		if end_pntr[lab_name][3]>end_ntwk_addr[3]:
+			cnt1+=1
+	if cnt==4 or cnt1==4:
+		print "No available host addresses"
+		client_socket.send("No available host addresses")
+		client_socket.recv(4096)
+		client_socket.send("done")
+		return
+	cnt=0
+	for i in range(0,4):
+		if ip_pntr[lab_name][i] == int(sv_ip_addr[i]):
+			cnt+=1
+		else:
+			break
+	if cnt==4:
+		ip_pntr[lab_name][3]+=1
+	gtway=list(ntwrk_id[lab_name])
+	gtway[3]=gtway[3]+1
+	output_list=[]
+	ip_addr=".".join(str(i) for i in ip_pntr[lab_name])
+	output_list.append(ip_addr+"/"+str(prfx[lab_name])) #IP address with prefix
+	output_list.append(".".join(str(i) for i in ntwrk_id[lab_name])) #Ntwrk Id
+	output_list.append(".".join(str(i) for i in end_pntr[lab_name])) #Bcast Address
+	output_list.append(".".join(str(i) for i in gtway))   #Default gateway
+	output_list.append(".".join(str(i) for i in gtway))	  #Local DNS
+	output_list.append(".".join(str(i) for i in mask[lab_name]))
+	for i in range(len(output_list)):
+		client_socket.send(output_list[i])
+		client_socket.recv(4096)
+	client_socket.send("done")
+	mac_ip[mac_adr]=output_list
+	flag=1
+	for i in range(3,-1,-1):
+		if flag==0:
+			break
+		if ip_pntr[lab_name][i]==255:
+			ip_pntr[lab_name][i]=0
+			flag=1
+		else:
+			ip_pntr[lab_name][i]+=1
+			flag=0
+	if lab_name=="None":
+		non_mac()
+
+def non_mac():
+	global ntwrk_id,ip_pntr,end_pntr,start_addr
+	tmp=2
+	flag=1
+	start_addr[3]+=4
+	if start_addr[3]>=255:
+		start_addr[3]=start_addr[3]-255
+		while flag==1:
+			if start_addr[tmp]==255:
+				start_addr[tmp]=0
+				flag=1
+			else:
+				start_addr[tmp]+=1
+				flag=0
+			tmp-=1
+	ntwrk_id["None"]=list(start_addr)
+	ip_pntr["None"]=list(start_addr)
+	ip_pntr["None"][3]+=1
+	end_pntr["None"]=list(start_addr)
+	end_pntr["None"][3]+=3
+
+#validating mac addr
+def is_valid_macaddr802(value):
+    allowed = re.compile(r"""
+                         (
+                             ^([0-9A-F]{2}[-]){5}([0-9A-F]{2})$
+                            |^([0-9A-F]{2}[:]){5}([0-9A-F]{2})$
+                         )
+                         """,
+                         re.VERBOSE)
+
+    if allowed.match(value) is None:
+        return 0
+    else:
+        return 1
+
+#main
+def main():
+	global start_addr,end_addr,dictnary,ip_pntr,mac_ip,end_pntr,ntwrk_id,mask,prfx,client_socket,end_ntwk_addr
+	global sv_ip_addr
+	port=1584
+	host=socket.gethostname()
+	server_socket=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+	try: 
+		server_socket.bind((host, port))
+	except:
+		print "Error in Socket creation"
+		exit(0)
+	server_socket.listen(5)
+	sv_ip_addr=commands.getoutput("hostname -I")
+	sv_ip_addr=sv_ip_addr.split(".")
+	#file handling
+	try:
+		config=open("subnets.conf","r")
+	except:
+		print "Cannot open the subnets file"
+		exit(0)
+	matr=config.readlines()
+	matr=[x.strip('\n') for x in matr]
+	ntwrk_range=matr[0].split('/')
+	if int(ntwrk_range[1])>=31 or int(ntwrk_range[1])<0:
+		print "Subnetting Failed, Invalid prefix length"
+		return
+	start_addr=ntwrk_range[0].split('.')
+	tmp_addr=list(start_addr)
+	end_addr=[]
+	dictnary={}
+	ip_pntr={}
+	end_pntr={}
+	ntwrk_id={}
+	prfx={}
+	mask={}
+	end_ntwk_addr=[]
+	num_val=32-int(ntwrk_range[1])
+	for i in range(len(tmp_addr)):
+		tmp_addr[i]=int(tmp_addr[i])
+		end_ntwk_addr.append('{:08b}'.format(tmp_addr[i]))
+	for i in range(3,-1,-1):
+		if num_val<8:
+			end_ntwk_addr[i]=end_ntwk_addr[i][0:8-num_val]+num_val*'1'
+		else:
+			end_ntwk_addr[i]=8*'1'
+		num_val-=8	
+	for i in range(len(end_ntwk_addr)):
+		end_ntwk_addr[i]=int(end_ntwk_addr[i],2)
+	for i in range(len(start_addr)):
+		start_addr[i]=int(start_addr[i])
+	ntwrk_range[1]=int(ntwrk_range[1])
+	matr[1]=int(matr[1])
+	labs={}
+	sort_list={}
+	mac_lab={}
+	mac_ip={}
+	for i in range(2,2+matr[1]):
+		lab=matr[i].split(':')
+		# labs[lab[0]]=int(lab[1])
+		sort_list[lab[0]]=int(lab[1])
+		# sort_list.append(lab[0])
+	for i in range(2+matr[1],len(matr)):
+		mac_detail=matr[i].split(" ")
+		# print mac_detail
+		mac_lab[mac_detail[0]]=mac_detail[1]
+
+	#sort
+	# print sort_list
+	sorted_list=sorted(sort_list.items(),key=operator.itemgetter(1),reverse=True)
+	# print sorted_list
+	# for i in range(0,matr[1]):
+	# 	host_list(labs,sort_list,i,ntwrk_range)
+	for lab_name,lab_no in sorted_list:
+		host_list(lab_name,lab_no,ntwrk_range)
+	# for lab_name,lab_no in sorted_list:
+		# print lab_name,dictnary[lab_name]['start'], dictnary[lab_name]['end']
+	ntwrk_id["None"]=list(start_addr)
+	ip_pntr["None"]=list(start_addr)
+	try:
+		ip_pntr["None"][3]+=1
+		lab_info={
+				'start':"1",
+				'end':"1"
+		}
+		dictnary["None"]=lab_info
+	except:
+		lab_info={
+				'start':"-1",
+				'end':"-1"
+		}
+		dictnary["None"]=lab_info
+	end_pntr["None"]=list(start_addr)
+	try:
+		end_pntr["None"][3]+=3
+	except:
+		ju=0
+	mask["None"]=[255,255,255,252]
+	prfx["None"]=30
+	while True:
+		try:
+			client_socket,addr=server_socket.accept()
+		except:
+			print "Error"
+			server_socket.close()
+			exit(0)
+		try:
+			args=client_socket.recv(4096)
+			# print args
+		except:
+			print "Connect closed"
+			exit(0)
+		# print args,args[1:12],args[15:17], len(args[21:len(args)-2]),len(args)
+		print args,args[14:16],args[20:len(args)-2],len(args)
+		if len(args)==39 and str(args[14:16])=="-m":
+			mac_num=str(args[20:len(args)-2])
+		elif len(args)==17:
+			mac_num=str(args)
+		else:
+			print "Invalid Arguments"
+			client_socket.send("Invalid Arguments")
+			client_socket.recv(4096)
+			client_socket.send("done")
+			client_socket.close()
+			continue
+		ret=is_valid_macaddr802(mac_num)
+		if ret==0:
+			print "Invalid MAC address format"
+			client_socket.send("Invalid MAC address format")
+			client_socket.recv(4096)
+			client_socket.send("done")
+			client_socket.close()
+			continue
+		# print mac_num,"val",ret
+		try:
+			lab_name=mac_lab[mac_num]
+		except:
+			lab_name="None"
+		try:
+			for i in range(len(mac_ip[mac_num])):
+				client_socket.send(mac_ip[mac_num][i])
+				client_socket.recv(4096)
+			client_socket.send("done")
+		except:
+			ip_assign(mac_num,lab_name)
+		client_socket.close()
+
+	# mac_ex = ["00:0A:95:9A:68:16","00:0A:95:9A:68:17","F8:D0:90:80:65:A8"]
+	# for i in range(len(mac_ex)):
+	# 	try:
+	# 		lab_name = mac_lab[mac_ex[i]]
+	# 	except:
+	# 		lab_name = "None"
+	# print ip_pntr
+		# print mac_ex[i],mac_ip[mac_ex[i]]
+
+if __name__=="__main__":
+	main()
+start_addr=[]
+end_addr=[]
+dictnary={}
+ip_pntr={}
+end_pntr={}
+ntwrk_id={}
+mac_ip={}
+prfx={}
+mask={}
+end_ntwk_addr=[]
+# print labs
+# print lenth
