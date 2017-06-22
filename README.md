@@ -3,6 +3,9 @@
 > Simple server that listens to client requests and assign appropriate IP address and subnet mask. The server has to allocate the address depending upon which lab the client belongs to and ssend it back to the client.
 
 ###Input: 
+The server listens to client requests and assign appropriate IP address and subnet mask. The server has to allocate the address depending upon which lab the client belongs to and ssend it back to the client.
+
+Input: 
 The Server will read from a file “​ subnets.conf​ ”, which will have the following format:
 1st Line - Generic Network Address with CIDR
 2nd Line - Number of labs:​ n
@@ -16,6 +19,11 @@ If the -m parameter is omitted (i.e. mac is omitted), it reads the MAC address o
 
 ###Output format:
  IP address with subnet(CIDR format)
+./client -m <mac_address>
+If the -m parameter is omitted (i.e. mac is omitted), it reads the MAC address of the appropriate interface of the system it is being run from.
+
+Output format:
+-> IP address with subnet(CIDR format)
 -> Network address
 -> Broadcast address
 -> Default Gateway
